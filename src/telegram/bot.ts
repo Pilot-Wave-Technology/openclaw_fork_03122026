@@ -179,6 +179,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   if (finalFetch) {
     const baseFetch = finalFetch;
     finalFetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      // @ts-ignore — node-fetch RequestInfo vs Node22 native Request type conflict
       return Promise.resolve(baseFetch(input, init)).catch((err: unknown) => {
         try {
           tagTelegramNetworkError(err, {
