@@ -12,6 +12,7 @@ import {
   DEFAULT_IDENTITY_FILENAME,
   DEFAULT_MEMORY_ALT_FILENAME,
   DEFAULT_MEMORY_FILENAME,
+  DEFAULT_RESOURCES_FILENAME,
   DEFAULT_SOUL_FILENAME,
   DEFAULT_TOOLS_FILENAME,
   DEFAULT_USER_FILENAME,
@@ -56,6 +57,7 @@ const BOOTSTRAP_FILE_NAMES = [
   DEFAULT_USER_FILENAME,
   DEFAULT_HEARTBEAT_FILENAME,
   DEFAULT_BOOTSTRAP_FILENAME,
+  DEFAULT_RESOURCES_FILENAME,
 ] as const;
 const BOOTSTRAP_FILE_NAMES_POST_ONBOARDING = BOOTSTRAP_FILE_NAMES.filter(
   (name) => name !== DEFAULT_BOOTSTRAP_FILENAME,
@@ -433,7 +435,21 @@ function respondWorkspaceFileUnsafe(respond: RespondFn, name: string): void {
   respond(
     false,
     undefined,
-    errorShape(ErrorCodes.INVALID_REQUEST, `unsafe workspace file "${name}"`),
+    errorShape(ErrorCodes.FILE_UNSAFE_PATH, `unsafe workspace file "${name}"`, {
+      details: { file: name, reason: "path_traversal_or_symlink_escape" },
+    }),
+  );
+}
+
+function respondWorkspaceFileWriteError(respond: RespondFn, name: string, reason?: string): void {
+  respond(
+    false,
+    undefined,
+    errorShape(ErrorCodes.FILE_WRITE_ERROR, `failed to write workspace file "${name}"${reason ? `: ${reason}` : ""}`, {
+      details: { file: name, reason: reason ?? "io_error" },
+      retryable: true,
+      retryAfterMs: 1000,
+    }),
   );
 }
 
@@ -748,8 +764,9 @@ export const agentsHandlers: GatewayRequestHandlers = {
         data: content,
         encoding: "utf8",
       });
-    } catch {
-      respondWorkspaceFileUnsafe(respond, name);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "unknown write error";
+      respondWorkspaceFileWriteError(respond, name, reason);
       return;
     }
     const meta = await statFileSafely(resolvedPath.ioPath);
