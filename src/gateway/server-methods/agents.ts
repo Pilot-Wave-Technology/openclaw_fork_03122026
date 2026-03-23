@@ -581,6 +581,7 @@ export const agentsHandlers: GatewayRequestHandlers = {
 
     const model = resolveOptionalStringParam(params.model);
     const avatar = resolveOptionalStringParam(params.avatar);
+    const tools = params.tools && typeof params.tools === "object" ? params.tools as Record<string, unknown> : undefined;
 
     const nextConfig = applyAgentConfig(cfg, {
       agentId,
@@ -589,6 +590,7 @@ export const agentsHandlers: GatewayRequestHandlers = {
         : {}),
       ...(workspaceDir ? { workspace: workspaceDir } : {}),
       ...(model ? { model } : {}),
+      ...(tools ? { tools: tools as { allow?: string[]; deny?: string[]; profile?: string } } : {}),
     });
 
     await writeConfigFile(nextConfig);

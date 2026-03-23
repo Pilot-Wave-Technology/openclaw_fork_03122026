@@ -71,6 +71,13 @@ export const AgentsUpdateParamsSchema = Type.Object(
     workspace: Type.Optional(NonEmptyString),
     model: Type.Optional(NonEmptyString),
     avatar: Type.Optional(Type.String()),
+    tools: Type.Optional(
+      Type.Object({
+        allow: Type.Optional(Type.Array(Type.String())),
+        deny: Type.Optional(Type.Array(Type.String())),
+        profile: Type.Optional(Type.String()),
+      }),
+    ),
   },
   { additionalProperties: false },
 );
