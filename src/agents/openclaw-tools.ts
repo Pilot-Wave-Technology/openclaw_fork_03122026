@@ -22,6 +22,7 @@ import { createSessionsListTool } from "./tools/sessions-list-tool.js";
 import { createSessionsSendTool } from "./tools/sessions-send-tool.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
+import { createTaskTool, createTaskStatusTool, createTaskActivityTool } from "./tools/task-management-tools.js";
 import { createTaskReportTool } from "./tools/task-report-tool.js";
 import { createTtsTool } from "./tools/tts-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
@@ -173,6 +174,9 @@ export function createOpenClawTools(
       config: options?.config,
       agentSessionKey: options?.agentSessionKey,
     }),
+    createTaskTool({ config: options?.config }),
+    createTaskStatusTool({ config: options?.config }),
+    createTaskActivityTool({ config: options?.config }),
     createSessionsListTool({
       agentSessionKey: options?.agentSessionKey,
       sandboxed: options?.sandboxed,
