@@ -41,7 +41,7 @@ export function createTaskReportTool(opts?: {
 }): AnyAgentTool {
   return {
     label: "Task Report",
-    name: "task_report",
+    name: "pwt_task_report",
     description:
       "Report task completion, failure, or a question to the control panel. " +
       "Call this when you finish your task, encounter an unrecoverable error, or need human input. " +
