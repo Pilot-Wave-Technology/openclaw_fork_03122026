@@ -1,9 +1,9 @@
 /**
- * task_report tool — allows agents to report task completion, failure, or questions
+ * pwt_task_report tool — allows agents to report structured task results
  * to the multi-agent control panel.
  *
- * This enables the task controller to detect when an agent finishes work,
- * parse planner subtasks, and advance the task DAG — without polling.
+ * Agents call this when they finish work, need human input, or hit an error.
+ * The control panel processes the structured report to advance the task DAG.
  */
 import { Type } from "@sinclair/typebox";
 import { stringEnum } from "../schema/typebox.js";
@@ -18,21 +18,36 @@ const TaskReportSchema = Type.Object({
   }),
   status: stringEnum(["completed", "failed", "blocked"], {
     description:
-      "Task status: 'completed' = work done, 'failed' = unrecoverable error, 'blocked' = need human input.",
+      "Task status: 'completed' = work done successfully, 'failed' = unrecoverable error, 'blocked' = need human input.",
   }),
-  result: Type.String({
-    description:
-      "Summary of what was done (completed), the error (failed), or the question (blocked). Include branch name, files changed, and any subtask JSON if you are a planner agent.",
+  summary: Type.String({
+    description: "Brief one-line summary of what was done, what failed, or what question you have.",
   }),
-  metadata: Type.Optional(
-    Type.Object(
-      {
-        branch: Type.Optional(Type.String({ description: "Git branch name" })),
-        files_changed: Type.Optional(Type.Array(Type.String(), { description: "List of files created or modified" })),
-      },
-      { additionalProperties: true, description: "Optional structured metadata." },
-    ),
-  ),
+  branch: Type.Optional(Type.String({
+    description: "Git branch name where changes were pushed.",
+  })),
+  files_changed: Type.Optional(Type.Array(Type.String(), {
+    description: "List of files created or modified.",
+  })),
+  commits: Type.Optional(Type.Array(Type.String(), {
+    description: "List of commit messages.",
+  })),
+  details: Type.Optional(Type.String({
+    description: "Detailed description of work done, error details, or full question context. For planner agents, include the json:subtasks block here.",
+  })),
+  test_results: Type.Optional(Type.Object({
+    passed: Type.Optional(Type.Number({ description: "Number of tests passed" })),
+    failed: Type.Optional(Type.Number({ description: "Number of tests failed" })),
+    coverage: Type.Optional(Type.String({ description: "Coverage percentage" })),
+    issues: Type.Optional(Type.Array(Type.String(), { description: "List of test issues found" })),
+  }, { additionalProperties: true, description: "Test results (for test agents)." })),
+  review: Type.Optional(Type.Object({
+    verdict: Type.Optional(stringEnum(["approve", "request_changes", "block"], {
+      description: "Review verdict",
+    })),
+    critical_issues: Type.Optional(Type.Array(Type.String(), { description: "Critical issues that must be fixed" })),
+    suggestions: Type.Optional(Type.Array(Type.String(), { description: "Non-blocking suggestions" })),
+  }, { additionalProperties: true, description: "Code review results (for review agents)." })),
 });
 
 export function createTaskReportTool(opts?: {
@@ -43,18 +58,35 @@ export function createTaskReportTool(opts?: {
     label: "Task Report",
     name: "pwt_task_report",
     description:
-      "Report task completion, failure, or a question to the control panel. " +
-      "Call this when you finish your task, encounter an unrecoverable error, or need human input. " +
-      "The task controller will process your report and advance the task pipeline.",
+      "Report structured task results to the control panel. " +
+      "Call this when you finish your task, encounter an error, or need human input. " +
+      "Include as much structured data as possible (branch, files, test results, review verdict) " +
+      "so the task controller can process your report automatically.",
     parameters: TaskReportSchema,
     execute: async (_toolCallId, args, signal) => {
       const params = args as Record<string, unknown>;
       const taskId = readStringParam(params, "task_id", { required: true, trim: true });
       const status = readStringParam(params, "status", { required: true, trim: true });
-      const result = readStringParam(params, "result", { required: true });
-      const metadata = params.metadata ?? {};
+      const summary = readStringParam(params, "summary", { required: true });
 
-      // Resolve control panel URL and auth token
+      // Collect all structured fields
+      const report: Record<string, unknown> = {
+        status,
+        summary,
+        branch: params.branch ?? null,
+        files_changed: params.files_changed ?? null,
+        commits: params.commits ?? null,
+        details: params.details ?? null,
+        test_results: params.test_results ?? null,
+        review: params.review ?? null,
+      };
+
+      // Build result string for backward compat (stored in tasks.result)
+      let resultText = summary;
+      if (params.details) {
+        resultText += "\n\n" + String(params.details);
+      }
+
       const controlPanelUrl =
         process.env.CONTROL_PANEL_URL || process.env.OPENCLAW_CONTROL_PANEL_URL || "";
       const token = process.env.OPENCLAW_GATEWAY_TOKEN || "";
@@ -62,14 +94,14 @@ export function createTaskReportTool(opts?: {
       if (!controlPanelUrl) {
         return jsonResult({
           success: false,
-          error: "CONTROL_PANEL_URL environment variable not set. Cannot report task.",
+          error: "CONTROL_PANEL_URL environment variable not set.",
         });
       }
 
       if (!token) {
         return jsonResult({
           success: false,
-          error: "OPENCLAW_GATEWAY_TOKEN not set. Cannot authenticate with control panel.",
+          error: "OPENCLAW_GATEWAY_TOKEN not set.",
         });
       }
 
@@ -82,7 +114,11 @@ export function createTaskReportTool(opts?: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ status, result, metadata }),
+          body: JSON.stringify({
+            status,
+            result: resultText,
+            report,
+          }),
           signal,
         });
 
