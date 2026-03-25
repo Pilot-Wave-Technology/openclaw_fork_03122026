@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { DEFAULT_HEARTBEAT_ACK_MAX_CHARS, stripHeartbeatToken } from "../auto-reply/heartbeat.js";
 import { normalizeVerboseLevel } from "../auto-reply/thinking.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
@@ -461,9 +462,47 @@ export function createAgentEventHandler({
       sourceRunId,
       text: bufferedText,
     });
-    const text = normalizedHeartbeatText.text.trim();
+    let text = normalizedHeartbeatText.text.trim();
     const shouldSuppressSilent =
       normalizedHeartbeatText.suppress || isSilentReplyText(text, SILENT_REPLY_TOKEN);
+
+    // Fallback: if buffer is empty (e.g. Gemini tool-call responses where
+    // no stream=assistant events were emitted), read the last assistant
+    // message from the session transcript.
+    if (!text && jobState === "done" && !shouldSuppressSilent) {
+      try {
+        const sessionData = loadSessionEntry(sessionKey);
+        const transcriptPath = sessionData.entry?.sessionFile;
+        if (transcriptPath) {
+          const rawContent = fs.readFileSync(transcriptPath, "utf-8");
+          const lines = rawContent.trim().split("\n");
+          // Read from the end to find the last assistant message with text
+          for (let i = lines.length - 1; i >= 0; i--) {
+            try {
+              const entry = JSON.parse(lines[i]);
+              const msg = entry?.message;
+              if (msg?.role === "assistant" && Array.isArray(msg.content)) {
+                for (const part of msg.content) {
+                  if (part?.type === "text" && typeof part.text === "string") {
+                    const extracted = stripInlineDirectiveTagsForDisplay(part.text).text.trim();
+                    if (extracted) {
+                      text = extracted;
+                      break;
+                    }
+                  }
+                }
+                if (text) break;
+              }
+            } catch {
+              // skip unparseable lines
+            }
+          }
+        }
+      } catch {
+        // Transcript read failed — proceed with empty text
+      }
+    }
+
     // Flush any throttled delta so streaming clients receive the complete text
     // before the final event. The 150 ms throttle in emitChatDelta may have
     // suppressed the most recent chunk, leaving the client with stale text.
