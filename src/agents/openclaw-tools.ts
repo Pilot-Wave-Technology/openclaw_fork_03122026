@@ -174,9 +174,18 @@ export function createOpenClawTools(
       config: options?.config,
       agentSessionKey: options?.agentSessionKey,
     }),
-    createTaskTool({ config: options?.config }),
-    createTaskStatusTool({ config: options?.config }),
-    createTaskActivityTool({ config: options?.config }),
+    createTaskTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    createTaskStatusTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    createTaskActivityTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
     createSessionsListTool({
       agentSessionKey: options?.agentSessionKey,
       sandboxed: options?.sandboxed,
