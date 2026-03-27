@@ -71,6 +71,8 @@ export function createTaskTool(opts?: {
       try {
         const body: Record<string, string> = { title, description };
         if (sourceThreadId) body.source_thread_id = sourceThreadId;
+        const gwAgentId = resolveAgentIdFromSession(opts?.agentSessionKey);
+        if (gwAgentId) body.gateway_agent_id = gwAgentId;
 
         const res = await fetch(`${url}/internal/goals/${encodeURIComponent(goalId)}/task-spec`, {
           method: "POST",
@@ -224,4 +226,11 @@ function resolveGoalIdFromSession(sessionKey?: string): string {
   const rest = parts.slice(2).join(":");
   const dashIndex = rest.indexOf("-");
   return dashIndex > 0 ? rest.substring(0, dashIndex) : rest;
+}
+
+function resolveAgentIdFromSession(sessionKey?: string): string {
+  // Session key format: agent:{agentId}:{goalId}-{threadId}
+  if (!sessionKey) return "";
+  const parts = sessionKey.split(":");
+  return parts.length >= 2 ? parts[1] : "";
 }

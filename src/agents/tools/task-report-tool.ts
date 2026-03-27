@@ -12,6 +12,13 @@ import { loadConfig } from "../../config/config.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam } from "./common.js";
 
+function resolveAgentIdFromSession(sessionKey?: string): string {
+  // Session key format: agent:{agentId}:{goalId}-{threadId}
+  if (!sessionKey) return "";
+  const parts = sessionKey.split(":");
+  return parts.length >= 2 ? parts[1] : "";
+}
+
 const TaskReportSchema = Type.Object({
   task_id: Type.String({
     description: "The task ID assigned to this agent. Provided in the dispatch message.",
@@ -118,6 +125,7 @@ export function createTaskReportTool(opts?: {
             status,
             result: resultText,
             report,
+            gateway_agent_id: resolveAgentIdFromSession(opts?.agentSessionKey),
           }),
           signal,
         });
