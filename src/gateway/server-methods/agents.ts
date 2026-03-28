@@ -529,10 +529,17 @@ export const agentsHandlers: GatewayRequestHandlers = {
 
     // Resolve agentDir against the config we're about to persist (vs the pre-write config),
     // so subsequent resolutions can't disagree about the agent's directory.
+    // Apply all config in a single write — name, workspace, model, tools.
+    // This avoids multiple config reloads that slow down agent readiness.
+    const model = typeof params.model === "string" && params.model.trim() ? params.model.trim() : undefined;
+    const tools = params.tools && typeof params.tools === "object" ? params.tools as { allow?: string[]; deny?: string[]; profile?: string } : undefined;
+
     let nextConfig = applyAgentConfig(cfg, {
       agentId,
       name: rawName,
       workspace: workspaceDir,
+      ...(model ? { model } : {}),
+      ...(tools ? { tools } : {}),
     });
     const agentDir = resolveAgentDir(nextConfig, agentId);
     nextConfig = applyAgentConfig(nextConfig, { agentId, agentDir });
