@@ -44,6 +44,7 @@ import {
 } from "./pi-embedded-helpers.js";
 import type { EmbeddedPiRunResult } from "./pi-embedded-runner.js";
 import { buildSystemPromptReport } from "./system-prompt-report.js";
+import { fireLifecycleWebhook } from "./lifecycle-webhook.js";
 import { redactRunIdentifier, resolveRunWorkspaceDir } from "./workspace-run.js";
 
 const log = createSubsystemLogger("agent/claude-cli");
@@ -248,6 +249,15 @@ export async function runCliAgent(params: {
         log.info(
           `cli exec: provider=${params.provider} model=${normalizedModel} promptChars=${params.prompt.length}`,
         );
+        fireLifecycleWebhook({
+          event: "agent.started",
+          session_key: params.sessionKey ?? "",
+          agent_id: params.agentId ?? "",
+          run_id: params.runId,
+          provider: params.provider,
+          model: normalizedModel,
+          timestamp: new Date().toISOString(),
+        });
         const logOutputText = isTruthyEnvValue(process.env.OPENCLAW_CLAUDE_CLI_LOG_OUTPUT);
         if (logOutputText) {
           const logArgs: string[] = [];
@@ -344,6 +354,17 @@ export async function runCliAgent(params: {
             log.warn(
               `cli watchdog timeout: provider=${params.provider} model=${modelId} session=${resolvedSessionId ?? params.sessionId} noOutputTimeoutMs=${noOutputTimeoutMs} pid=${managedRun.pid ?? "unknown"}`,
             );
+            fireLifecycleWebhook({
+              event: "agent.timeout",
+              session_key: params.sessionKey ?? "",
+              agent_id: params.agentId ?? "",
+              run_id: params.runId,
+              provider: params.provider,
+              model: modelId,
+              timestamp: new Date().toISOString(),
+              duration_ms: Date.now() - started,
+              reason: "no-output-timeout",
+            });
             if (params.sessionKey) {
               const stallNotice = [
                 `CLI agent (${params.provider}) produced no output for ${Math.round(noOutputTimeoutMs / 1000)}s and was terminated.`,
@@ -374,6 +395,19 @@ export async function runCliAgent(params: {
           const err = stderr || stdout || "CLI failed.";
           const reason = classifyFailoverReason(err) ?? "unknown";
           const status = resolveFailoverStatus(reason);
+          fireLifecycleWebhook({
+            event: "agent.failed",
+            session_key: params.sessionKey ?? "",
+            agent_id: params.agentId ?? "",
+            run_id: params.runId,
+            provider: params.provider,
+            model: modelId,
+            timestamp: new Date().toISOString(),
+            duration_ms: Date.now() - started,
+            exit_code: result.exitCode ?? -1,
+            error: err.substring(0, 500),
+            reason,
+          });
           throw new FailoverError(err, {
             reason,
             provider: params.provider,
@@ -381,6 +415,18 @@ export async function runCliAgent(params: {
             status,
           });
         }
+
+        fireLifecycleWebhook({
+          event: "agent.completed",
+          session_key: params.sessionKey ?? "",
+          agent_id: params.agentId ?? "",
+          run_id: params.runId,
+          provider: params.provider,
+          model: modelId,
+          timestamp: new Date().toISOString(),
+          duration_ms: Date.now() - started,
+          exit_code: 0,
+        });
 
         const outputMode = useResume ? (backend.resumeOutput ?? backend.output) : backend.output;
 
