@@ -558,9 +558,14 @@ export const agentHandlers: GatewayRequestHandlers = {
       normalizedTurnSource && isGatewayMessageChannel(normalizedTurnSource)
         ? normalizedTurnSource
         : undefined;
+    // Backend clients (control panel, API integrations) should always be treated
+    // as internal/direct messages — not channel messages. Without this, the CLI
+    // agent sees a group-chat context and disables tools.
+    const isBackendClient =
+      client?.connect?.client?.mode === "backend";
     const originMessageChannel =
       turnSourceMessageChannel ??
-      (client?.connect && isWebchatConnect(client.connect)
+      (client?.connect && (isWebchatConnect(client.connect) || isBackendClient)
         ? INTERNAL_MESSAGE_CHANNEL
         : resolvedChannel);
 
