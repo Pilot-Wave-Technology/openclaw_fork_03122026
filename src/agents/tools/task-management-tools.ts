@@ -70,10 +70,12 @@ export function createTaskTool(opts?: {
 
       try {
         const body: Record<string, string> = { title, description };
-        // Always resolve source_thread_id from session key — the agent doesn't
-        // reliably know its own thread ID, but the session key contains it.
-        const resolvedThreadId = sourceThreadId || resolveThreadIdFromSession(opts?.agentSessionKey);
-        if (resolvedThreadId) body.source_thread_id = resolvedThreadId;
+        // Always prefer thread ID from session key — the agent's own
+        // "conversation ID" is the gateway's internal timestamp, not the
+        // control panel's thread UUID.
+        const sessionKeyThreadId = resolveThreadIdFromSession(opts?.agentSessionKey);
+        if (sessionKeyThreadId) body.source_thread_id = sessionKeyThreadId;
+        else if (sourceThreadId) body.source_thread_id = sourceThreadId;
         const gwAgentId = resolveAgentIdFromSession(opts?.agentSessionKey);
         if (gwAgentId) body.gateway_agent_id = gwAgentId;
 
@@ -296,12 +298,16 @@ function resolveGoalIdFromSession(sessionKey?: string): string {
 
 function resolveThreadIdFromSession(sessionKey?: string): string {
   // Session key format: agent:{agentId}:{goalId}-{threadId}
+  // The control panel sets this as: agent:abhishek-shca:2ddca454-f0460f94-a20e-...
+  // But the gateway may assign its own session key with a timestamp instead.
+  // Returns whatever is after the first dash in the last segment.
   if (!sessionKey) return "";
   const parts = sessionKey.split(":");
   if (parts.length < 3) return "";
   const rest = parts.slice(2).join(":");
   const dashIndex = rest.indexOf("-");
-  return dashIndex > 0 ? rest.substring(dashIndex + 1) : "";
+  if (dashIndex <= 0) return "";
+  return rest.substring(dashIndex + 1);
 }
 
 function resolveAgentIdFromSession(sessionKey?: string): string {
