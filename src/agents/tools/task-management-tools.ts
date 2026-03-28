@@ -216,6 +216,69 @@ export function createTaskActivityTool(opts?: {
   };
 }
 
+// ── pwt_message_shca ────────────────────────────────────────────────────────
+
+const MessageShcaSchema = Type.Object({
+  task_id: Type.String({
+    description: "Your assigned task ID.",
+  }),
+  content: Type.String({
+    description: "Message content to send to the project manager.",
+  }),
+  type: Type.Optional(Type.String({
+    description: "Message type: 'progress' for status updates, 'question' for clarifications, 'fyi' for informational. Defaults to 'progress'.",
+  })),
+});
+
+export function createMessageShcaTool(opts?: {
+  config?: OpenClawConfig;
+  goalId?: string;
+  agentSessionKey?: string;
+}): AnyAgentTool {
+  return {
+    label: "Message SHCA",
+    name: "pwt_message_shca",
+    description:
+      "Send a message to the project manager (SHCA) without blocking your task. " +
+      "Use for progress updates, clarification questions, or FYI messages. " +
+      "This does NOT pause your work — continue after sending.",
+    parameters: MessageShcaSchema,
+    execute: async (_toolCallId, args, signal) => {
+      const params = args as Record<string, unknown>;
+      const taskId = readStringParam(params, "task_id", { required: true, trim: true });
+      const content = readStringParam(params, "content", { required: true });
+      const msgType = readStringParam(params, "type") || "progress";
+
+      const { url, token } = getControlPanelConfig();
+      if (!url) return jsonResult({ success: false, error: "CONTROL_PANEL_URL not set." });
+      if (!token) return jsonResult({ success: false, error: "OPENCLAW_GATEWAY_TOKEN not set." });
+
+      const gwAgentId = resolveAgentIdFromSession(opts?.agentSessionKey);
+
+      try {
+        const res = await fetch(
+          `${url}/internal/tasks/${encodeURIComponent(taskId)}/message-shca`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ content, type: msgType, gateway_agent_id: gwAgentId }),
+            signal,
+          },
+        );
+
+        if (!res.ok) {
+          const err = await res.text().catch(() => "unknown");
+          return jsonResult({ success: false, error: `HTTP ${res.status}: ${err}` });
+        }
+
+        return jsonResult({ success: true, message: "Message sent to SHCA." });
+      } catch (err) {
+        return jsonResult({ success: false, error: String(err) });
+      }
+    },
+  };
+}
+
 // ── Helper ──────────────────────────────────────────────────────────────────
 
 function resolveGoalIdFromSession(sessionKey?: string): string {
