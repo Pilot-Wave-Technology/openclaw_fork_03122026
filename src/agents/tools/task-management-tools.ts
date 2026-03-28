@@ -70,7 +70,10 @@ export function createTaskTool(opts?: {
 
       try {
         const body: Record<string, string> = { title, description };
-        if (sourceThreadId) body.source_thread_id = sourceThreadId;
+        // Always resolve source_thread_id from session key — the agent doesn't
+        // reliably know its own thread ID, but the session key contains it.
+        const resolvedThreadId = sourceThreadId || resolveThreadIdFromSession(opts?.agentSessionKey);
+        if (resolvedThreadId) body.source_thread_id = resolvedThreadId;
         const gwAgentId = resolveAgentIdFromSession(opts?.agentSessionKey);
         if (gwAgentId) body.gateway_agent_id = gwAgentId;
 
@@ -289,6 +292,16 @@ function resolveGoalIdFromSession(sessionKey?: string): string {
   const rest = parts.slice(2).join(":");
   const dashIndex = rest.indexOf("-");
   return dashIndex > 0 ? rest.substring(0, dashIndex) : rest;
+}
+
+function resolveThreadIdFromSession(sessionKey?: string): string {
+  // Session key format: agent:{agentId}:{goalId}-{threadId}
+  if (!sessionKey) return "";
+  const parts = sessionKey.split(":");
+  if (parts.length < 3) return "";
+  const rest = parts.slice(2).join(":");
+  const dashIndex = rest.indexOf("-");
+  return dashIndex > 0 ? rest.substring(dashIndex + 1) : "";
 }
 
 function resolveAgentIdFromSession(sessionKey?: string): string {
