@@ -31,6 +31,14 @@ const CreateTaskSchema = Type.Object({
       "functional requirements, error handling, testing requirements, and definition of done. " +
       "This is what the Planner agent reads to create the implementation plan.",
   }),
+  resources: Type.Optional(Type.Array(
+    Type.Object({
+      name: Type.String({ description: "Resource name as listed in RESOURCES.md" }),
+      access: Type.Optional(Type.String({ description: "Access level: 'read' or 'read-write'. Defaults based on resource type." })),
+      paths: Type.Optional(Type.Array(Type.String(), { description: "For GCS: specific file/folder paths. Empty = entire bucket." })),
+    }),
+    { description: "Which goal resources this task needs. Check RESOURCES.md for available resources. If omitted, all goal resources are assigned." },
+  )),
   source_thread_id: Type.Optional(Type.String({
     description:
       "The conversation thread ID where this task was requested. " +
@@ -69,15 +77,18 @@ export function createTaskTool(opts?: {
       if (!token) return jsonResult({ success: false, error: "OPENCLAW_GATEWAY_TOKEN not set." });
 
       try {
-        const body: Record<string, string> = { title, description };
-        // Always prefer thread ID from session key — the agent's own
-        // "conversation ID" is the gateway's internal timestamp, not the
-        // control panel's thread UUID.
+        const body: Record<string, unknown> = { title, description };
+        // Always prefer thread ID from session key
         const sessionKeyThreadId = resolveThreadIdFromSession(opts?.agentSessionKey);
         if (sessionKeyThreadId) body.source_thread_id = sessionKeyThreadId;
         else if (sourceThreadId) body.source_thread_id = sourceThreadId;
         const gwAgentId = resolveAgentIdFromSession(opts?.agentSessionKey);
         if (gwAgentId) body.gateway_agent_id = gwAgentId;
+        // Pass resource requirements if specified
+        const resources = params.resources;
+        if (Array.isArray(resources) && resources.length > 0) {
+          body.resources = resources;
+        }
 
         const res = await fetch(`${url}/internal/goals/${encodeURIComponent(goalId)}/task-spec`, {
           method: "POST",
