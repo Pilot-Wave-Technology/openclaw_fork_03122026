@@ -758,6 +758,8 @@ export const AgentEntrySchema = z
     sandbox: AgentSandboxSchema,
     tools: AgentToolsSchema,
     runtime: AgentRuntimeSchema,
+    /** Dispatch mode set by external control panel: "shca" | "ia". */
+    dispatchMode: z.string().optional(),
   })
   .strict();
 
