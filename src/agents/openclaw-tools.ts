@@ -24,6 +24,7 @@ import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
 import { createTaskTool, createTaskStatusTool, createTaskActivityTool, createMessageShcaTool } from "./tools/task-management-tools.js";
 import { createTaskReportTool } from "./tools/task-report-tool.js";
+import { createAcpMemorySearchTool, createAcpMemoryGetTool, createAcpMemorySaveTool } from "./tools/memory-acp-tools.js";
 import { createTtsTool } from "./tools/tts-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
@@ -229,6 +230,22 @@ export function createOpenClawTools(
     ...(imageTool ? [imageTool] : []),
     ...(pdfTool ? [pdfTool] : []),
   ];
+
+  // ACP memory tools — replace built-in memory_search/memory_get for SHCA agents.
+  // Detected by PWT_GOAL_ID env var (set by control panel on instance creation).
+  // These use same tool names, so existingToolNames prevents plugin duplicates.
+  const isAcpManaged = !!process.env.PWT_GOAL_ID;
+  if (isAcpManaged) {
+    const agentId = resolveSessionAgentId({
+      sessionKey: options?.agentSessionKey,
+      config: options?.config,
+    });
+    tools.push(
+      createAcpMemorySearchTool({ agentId }),
+      createAcpMemoryGetTool({ agentId }),
+      createAcpMemorySaveTool({ agentId }),
+    );
+  }
 
   const pluginTools = resolvePluginTools({
     context: {
