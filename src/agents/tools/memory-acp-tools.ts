@@ -10,6 +10,14 @@ import { Type } from "@sinclair/typebox";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam, readNumberParam } from "./common.js";
 
+function logMemoryToolError(tool: string, msg: string, detail?: unknown): void {
+  console.error(`[ACP Memory] ${tool}: ${msg}`, detail ?? "");
+}
+
+function logMemoryToolInfo(tool: string, msg: string): void {
+  console.log(`[ACP Memory] ${tool}: ${msg}`);
+}
+
 function getControlPanelUrl(): string {
   return (
     process.env.CONTROL_PANEL_URL ||
@@ -78,6 +86,7 @@ export function createAcpMemorySearchTool(opts?: {
       const agentId = opts?.agentId || "";
 
       if (!baseUrl || !token || !agentId) {
+        logMemoryToolError("memory_search", "Not configured", { baseUrl: !!baseUrl, token: !!token, agentId });
         return jsonResult({
           results: [],
           error: "ACP memory not configured (missing CONTROL_PANEL_URL, token, or agent ID).",
@@ -94,6 +103,7 @@ export function createAcpMemorySearchTool(opts?: {
       if (type) searchParams.set("type", type);
 
       const url = `${baseUrl}/internal/memory/${encodeURIComponent(agentId)}/search?${searchParams}`;
+      logMemoryToolInfo("memory_search", `query="${query}" scope=${scope} goal=${getGoalId()}`);
 
       try {
         const res = await fetch(url, {
@@ -103,6 +113,7 @@ export function createAcpMemorySearchTool(opts?: {
 
         if (!res.ok) {
           const errText = await res.text().catch(() => "unknown error");
+          logMemoryToolError("memory_search", `HTTP ${res.status}`, errText);
           return jsonResult({ results: [], error: `Search failed (${res.status}): ${errText}` });
         }
 
@@ -110,6 +121,8 @@ export function createAcpMemorySearchTool(opts?: {
           results: Array<Record<string, unknown>>;
           count: number;
         };
+
+        logMemoryToolInfo("memory_search", `${data.results?.length ?? 0} results for "${query}"`);
 
         // Format results as readable text for the agent
         if (!data.results || data.results.length === 0) {
@@ -132,6 +145,7 @@ export function createAcpMemorySearchTool(opts?: {
 
         return jsonResult({ text: lines.join("\n"), count: data.results.length });
       } catch (err) {
+        logMemoryToolError("memory_search", "Request failed", err);
         return jsonResult({ results: [], error: `Memory search failed: ${String(err)}` });
       }
     },
@@ -165,10 +179,12 @@ export function createAcpMemoryGetTool(opts?: {
       const agentId = opts?.agentId || "";
 
       if (!baseUrl || !token || !agentId) {
+        logMemoryToolError("memory_get", "Not configured");
         return jsonResult({ error: "ACP memory not configured." });
       }
 
       const url = `${baseUrl}/internal/memory/${encodeURIComponent(agentId)}/detail/${encodeURIComponent(itemId)}`;
+      logMemoryToolInfo("memory_get", `id=${itemId}`);
 
       try {
         const res = await fetch(url, {
@@ -178,12 +194,15 @@ export function createAcpMemoryGetTool(opts?: {
 
         if (!res.ok) {
           const errText = await res.text().catch(() => "unknown error");
+          logMemoryToolError("memory_get", `HTTP ${res.status}`, errText);
           return jsonResult({ error: `Detail fetch failed (${res.status}): ${errText}` });
         }
 
         const data = await res.json();
+        logMemoryToolInfo("memory_get", `Retrieved detail for ${itemId} (source: ${data.source})`);
         return jsonResult(data);
       } catch (err) {
+        logMemoryToolError("memory_get", "Request failed", err);
         return jsonResult({ error: `Memory detail failed: ${String(err)}` });
       }
     },
@@ -241,10 +260,12 @@ export function createAcpMemorySaveTool(opts?: {
       const agentId = opts?.agentId || "";
 
       if (!baseUrl || !token || !agentId) {
+        logMemoryToolError("memory_save", "Not configured");
         return jsonResult({ success: false, error: "ACP memory not configured." });
       }
 
       const url = `${baseUrl}/internal/memory/${encodeURIComponent(agentId)}`;
+      logMemoryToolInfo("memory_save", `title="${title}" type=${type} scope=${scope}`);
 
       try {
         const res = await fetch(url, {
@@ -267,16 +288,19 @@ export function createAcpMemorySaveTool(opts?: {
 
         if (!res.ok) {
           const errText = await res.text().catch(() => "unknown error");
+          logMemoryToolError("memory_save", `HTTP ${res.status}`, errText);
           return jsonResult({ success: false, error: `Save failed (${res.status}): ${errText}` });
         }
 
         const data = await res.json();
+        logMemoryToolInfo("memory_save", `Saved: id=${data.id} title="${title}"`);
         return jsonResult({
           success: true,
           id: data.id,
           message: `Memory saved: "${title}" (scope: ${scope})`,
         });
       } catch (err) {
+        logMemoryToolError("memory_save", "Request failed", err);
         return jsonResult({ success: false, error: `Memory save failed: ${String(err)}` });
       }
     },
