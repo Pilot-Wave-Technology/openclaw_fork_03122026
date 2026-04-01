@@ -22,10 +22,11 @@ function logMemoryToolInfo(tool: string, msg: string): void {
 }
 
 /** Cached ACP config — read once from workspace on first tool call. */
-let _acpConfigCache: Record<string, string> | null | undefined = undefined;
+let _acpConfigCache: Record<string, string> | null = null;
+let _acpConfigLoaded = false;
 
 function loadAcpConfig(workspaceDir?: string): Record<string, string> | null {
-  if (_acpConfigCache !== undefined) return _acpConfigCache;
+  if (_acpConfigLoaded) return _acpConfigCache;
 
   // Try workspace dir first, then common locations
   const candidates: string[] = [];
@@ -38,6 +39,7 @@ function loadAcpConfig(workspaceDir?: string): Record<string, string> | null {
     try {
       const raw = fs.readFileSync(p, "utf-8");
       _acpConfigCache = JSON.parse(raw);
+      _acpConfigLoaded = true;
       logMemoryToolInfo("config", `Loaded ACP_CONFIG.json from ${p}`);
       return _acpConfigCache;
     } catch {
@@ -45,7 +47,7 @@ function loadAcpConfig(workspaceDir?: string): Record<string, string> | null {
     }
   }
 
-  _acpConfigCache = null;
+  _acpConfigLoaded = true;
   return null;
 }
 
