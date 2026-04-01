@@ -30,17 +30,17 @@ function loadAcpConfig(workspaceDir?: string): Record<string, string> | null {
 
   // Try workspace dir first, then common locations
   const candidates: string[] = [];
-  if (workspaceDir) candidates.push(path.join(workspaceDir, "ACP_CONFIG.json"));
+  if (workspaceDir) candidates.push(path.join(workspaceDir, "ACP_CONFIG.md"));
 
   // Also check process.cwd() (agent workspace is usually cwd)
-  candidates.push(path.join(process.cwd(), "ACP_CONFIG.json"));
+  candidates.push(path.join(process.cwd(), "ACP_CONFIG.md"));
 
   for (const p of candidates) {
     try {
       const raw = fs.readFileSync(p, "utf-8");
       _acpConfigCache = JSON.parse(raw);
       _acpConfigLoaded = true;
-      logMemoryToolInfo("config", `Loaded ACP_CONFIG.json from ${p}`);
+      logMemoryToolInfo("config", `Loaded ACP_CONFIG.md from ${p}`);
       return _acpConfigCache;
     } catch {
       // File not found or invalid — try next
@@ -51,7 +51,7 @@ function loadAcpConfig(workspaceDir?: string): Record<string, string> | null {
   return null;
 }
 
-/** Check if this agent is ACP-managed by looking for ACP_CONFIG.json */
+/** Check if this agent is ACP-managed by looking for ACP_CONFIG.md */
 export function isAcpManaged(workspaceDir?: string): boolean {
   return loadAcpConfig(workspaceDir) !== null;
 }
