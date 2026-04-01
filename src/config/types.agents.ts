@@ -87,6 +87,8 @@ export type AgentConfig = {
   tools?: AgentToolsConfig;
   /** Optional runtime descriptor for this agent. */
   runtime?: AgentRuntimeConfig;
+  /** Dispatch mode set by external control panel: "shca" | "ia" | undefined. */
+  dispatchMode?: string;
 };
 
 export type AgentsConfig = {

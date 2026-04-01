@@ -58,6 +58,8 @@ export const AgentsCreateParamsSchema = Type.Object(
         profile: Type.Optional(Type.String()),
       }),
     ),
+    /** Dispatch mode: "shca" = SHCA with memory tools, "ia" = IA worker, unset = regular agent. */
+    dispatchMode: Type.Optional(Type.String()),
   },
   { additionalProperties: false },
 );

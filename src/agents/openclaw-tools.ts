@@ -2,7 +2,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { resolvePluginTools } from "../plugins/tools.js";
 import { getActiveRuntimeWebToolsMetadata } from "../secrets/runtime.js";
 import type { GatewayMessageChannel } from "../utils/message-channel.js";
-import { resolveSessionAgentId } from "./agent-scope.js";
+import { resolveSessionAgentId, resolveAgentConfig } from "./agent-scope.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
 import type { SpawnedToolContext } from "./spawned-context.js";
 import type { ToolFsPolicy } from "./tool-fs-policy.js";
@@ -24,7 +24,7 @@ import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
 import { createTaskTool, createTaskStatusTool, createTaskActivityTool, createMessageShcaTool } from "./tools/task-management-tools.js";
 import { createTaskReportTool } from "./tools/task-report-tool.js";
-import { createAcpMemorySearchTool, createAcpMemoryGetTool, createAcpMemorySaveTool, isAcpManaged } from "./tools/memory-acp-tools.js";
+import { createAcpMemorySearchTool, createAcpMemoryGetTool, createAcpMemorySaveTool } from "./tools/memory-acp-tools.js";
 import { createTtsTool } from "./tools/tts-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
@@ -232,13 +232,16 @@ export function createOpenClawTools(
   ];
 
   // ACP memory tools — replace built-in memory_search/memory_get for SHCA agents.
-  // Detected by ACP_CONFIG.json in the agent's workspace (written by control panel).
-  // These use same tool names, so existingToolNames prevents plugin duplicates.
-  if (isAcpManaged(workspaceDir)) {
-    const agentId = resolveSessionAgentId({
-      sessionKey: options?.agentSessionKey,
-      config: options?.config,
-    });
+  // Detected by dispatchMode in agent config (set by control panel at agents.create).
+  // dispatchMode: "shca" → memory tools, "ia" → no memory tools.
+  const agentId = resolveSessionAgentId({
+    sessionKey: options?.agentSessionKey,
+    config: options?.config,
+  });
+  const agentCfg = options?.config && agentId
+    ? resolveAgentConfig(options.config, agentId)
+    : undefined;
+  if (agentCfg?.dispatchMode === "shca") {
     tools.push(
       createAcpMemorySearchTool({ agentId }),
       createAcpMemoryGetTool({ agentId }),

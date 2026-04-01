@@ -133,6 +133,7 @@ export function applyAgentConfig(
     agentDir?: string;
     model?: string;
     tools?: { allow?: string[]; deny?: string[]; profile?: string };
+    dispatchMode?: string;
   },
 ): OpenClawConfig {
   const agentId = normalizeAgentId(params.agentId);
@@ -147,6 +148,7 @@ export function applyAgentConfig(
     ...(params.agentDir ? { agentDir: params.agentDir } : {}),
     ...(params.model ? { model: params.model } : {}),
     ...(params.tools ? { tools: { ...base.tools, ...params.tools } } : {}),
+    ...(params.dispatchMode ? { dispatchMode: params.dispatchMode } : {}),
   };
   const nextList = [...list];
   if (index >= 0) {

@@ -10,9 +10,6 @@ import { Type } from "@sinclair/typebox";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam, readNumberParam } from "./common.js";
 
-import * as fs from "node:fs";
-import * as path from "node:path";
-
 function logMemoryToolError(tool: string, msg: string, detail?: unknown): void {
   console.error(`[ACP Memory] ${tool}: ${msg}`, detail ?? "");
 }
@@ -21,45 +18,8 @@ function logMemoryToolInfo(tool: string, msg: string): void {
   console.log(`[ACP Memory] ${tool}: ${msg}`);
 }
 
-/** Cached ACP config — read once from workspace on first tool call. */
-let _acpConfigCache: Record<string, string> | null = null;
-let _acpConfigLoaded = false;
-
-function loadAcpConfig(workspaceDir?: string): Record<string, string> | null {
-  if (_acpConfigLoaded) return _acpConfigCache;
-
-  // Try workspace dir first, then common locations
-  const candidates: string[] = [];
-  if (workspaceDir) candidates.push(path.join(workspaceDir, "ACP_CONFIG.md"));
-
-  // Also check process.cwd() (agent workspace is usually cwd)
-  candidates.push(path.join(process.cwd(), "ACP_CONFIG.md"));
-
-  for (const p of candidates) {
-    try {
-      const raw = fs.readFileSync(p, "utf-8");
-      _acpConfigCache = JSON.parse(raw);
-      _acpConfigLoaded = true;
-      logMemoryToolInfo("config", `Loaded ACP_CONFIG.md from ${p}`);
-      return _acpConfigCache;
-    } catch {
-      // File not found or invalid — try next
-    }
-  }
-
-  _acpConfigLoaded = true;
-  return null;
-}
-
-/** Check if this agent is ACP-managed by looking for ACP_CONFIG.md */
-export function isAcpManaged(workspaceDir?: string): boolean {
-  return loadAcpConfig(workspaceDir) !== null;
-}
-
 function getControlPanelUrl(): string {
-  const cfg = loadAcpConfig();
   return (
-    cfg?.control_panel_url ||
     process.env.CONTROL_PANEL_URL ||
     process.env.OPENCLAW_CONTROL_PANEL_URL ||
     ""
@@ -68,18 +28,6 @@ function getControlPanelUrl(): string {
 
 function getAuthToken(): string {
   return process.env.OPENCLAW_GATEWAY_TOKEN || "";
-}
-
-function getGoalId(): string {
-  return loadAcpConfig()?.goal_id || process.env.PWT_GOAL_ID || "";
-}
-
-function getThreadId(): string {
-  return loadAcpConfig()?.thread_id || process.env.PWT_THREAD_ID || "";
-}
-
-function getAgentTemplateId(): string {
-  return loadAcpConfig()?.agent_template_id || "";
 }
 
 // ── memory_search ───────────────────────────────────────────────────────────
@@ -137,17 +85,16 @@ export function createAcpMemorySearchTool(opts?: {
         });
       }
 
+      // agent_id is the gateway instance ID — control panel resolves goal_id/thread_id from agent_instances table
       const searchParams = new URLSearchParams({
         q: query,
-        goal_id: getGoalId(),
-        thread_id: getThreadId(),
         scope,
         max_results: String(maxResults),
       });
       if (type) searchParams.set("type", type);
 
       const url = `${baseUrl}/internal/memory/${encodeURIComponent(agentId)}/search?${searchParams}`;
-      logMemoryToolInfo("memory_search", `query="${query}" scope=${scope} goal=${getGoalId()}`);
+      logMemoryToolInfo("memory_search", `query="${query}" scope=${scope} agent=${agentId}`);
 
       try {
         const res = await fetch(url, {
@@ -323,8 +270,6 @@ export function createAcpMemorySaveTool(opts?: {
             content,
             type,
             scope,
-            goal_id: getGoalId(),
-            thread_id: getThreadId(),
             files,
           }),
           signal,

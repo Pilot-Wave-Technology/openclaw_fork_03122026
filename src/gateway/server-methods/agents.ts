@@ -533,6 +533,7 @@ export const agentsHandlers: GatewayRequestHandlers = {
     // This avoids multiple config reloads that slow down agent readiness.
     const model = typeof params.model === "string" && params.model.trim() ? params.model.trim() : undefined;
     const tools = params.tools && typeof params.tools === "object" ? params.tools as { allow?: string[]; deny?: string[]; profile?: string } : undefined;
+    const dispatchMode = typeof params.dispatchMode === "string" && params.dispatchMode.trim() ? params.dispatchMode.trim() : undefined;
 
     let nextConfig = applyAgentConfig(cfg, {
       agentId,
@@ -540,6 +541,7 @@ export const agentsHandlers: GatewayRequestHandlers = {
       workspace: workspaceDir,
       ...(model ? { model } : {}),
       ...(tools ? { tools } : {}),
+      ...(dispatchMode ? { dispatchMode } : {}),
     });
     const agentDir = resolveAgentDir(nextConfig, agentId);
     nextConfig = applyAgentConfig(nextConfig, { agentId, agentDir });
