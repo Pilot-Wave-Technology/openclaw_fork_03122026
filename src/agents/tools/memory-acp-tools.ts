@@ -39,13 +39,13 @@ const AcpMemorySearchSchema = Type.Object({
   scope: Type.Optional(
     Type.String({
       description:
-        'Search scope: "all" (default, current goal + global), "goal", "conversation", "cross_goal" (all goals you work on).',
+        'Search scope: "all" (default — searches ALL your goals, current goal ranked higher), "goal" (current goal only), "conversation" (this chat only).',
     }),
   ),
   type: Type.Optional(
     Type.String({
       description:
-        'Filter by type: "decision", "task_outcome", "blocker", "preference", "observation", "context".',
+        'Filter by type: "decision", "task_outcome", "blocker", "progress", "message", "preference", "observation", "context".',
     }),
   ),
   max_results: Type.Optional(
@@ -63,8 +63,9 @@ export function createAcpMemorySearchTool(opts?: {
     name: "memory_search",
     description:
       "Search your project memory — decisions, task outcomes, blockers, " +
-      "preferences, and context across all your goals. " +
-      "Use before making decisions or when you need context about past work.",
+      "progress updates, conversation history, preferences, and context. " +
+      "Searches across ALL your goals (current goal ranked higher). " +
+      "ALWAYS use this before answering questions about past work, decisions, or status.",
     parameters: AcpMemorySearchSchema,
     execute: async (_toolCallId, args, signal) => {
       const params = args as Record<string, unknown>;
