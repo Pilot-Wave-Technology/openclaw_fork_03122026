@@ -26,6 +26,14 @@ interface LifecycleEvent {
   exit_code?: number;
   error?: string;
   reason?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_tokens?: number;
+    cache_write_tokens?: number;
+  };
+  num_turns?: number;
+  session_id?: string;
 }
 
 const WEBHOOK_TIMEOUT_MS = 5000;

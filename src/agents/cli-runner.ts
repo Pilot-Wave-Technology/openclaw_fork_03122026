@@ -416,6 +416,17 @@ export async function runCliAgent(params: {
           });
         }
 
+        const outputMode = useResume ? (backend.resumeOutput ?? backend.output) : backend.output;
+
+        let parsedOutput: { text: string; sessionId?: string; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number } };
+        if (outputMode === "text") {
+          parsedOutput = { text: stdout, sessionId: undefined };
+        } else if (outputMode === "jsonl") {
+          parsedOutput = parseCliJsonl(stdout, backend) ?? { text: stdout };
+        } else {
+          parsedOutput = parseCliJson(stdout, backend) ?? { text: stdout };
+        }
+
         fireLifecycleWebhook({
           event: "agent.completed",
           session_key: params.sessionKey ?? "",
@@ -426,20 +437,16 @@ export async function runCliAgent(params: {
           timestamp: new Date().toISOString(),
           duration_ms: Date.now() - started,
           exit_code: 0,
+          usage: parsedOutput.usage ? {
+            input_tokens: parsedOutput.usage.input,
+            output_tokens: parsedOutput.usage.output,
+            cache_read_tokens: parsedOutput.usage.cacheRead,
+            cache_write_tokens: parsedOutput.usage.cacheWrite,
+          } : undefined,
+          session_id: parsedOutput.sessionId,
         });
 
-        const outputMode = useResume ? (backend.resumeOutput ?? backend.output) : backend.output;
-
-        if (outputMode === "text") {
-          return { text: stdout, sessionId: undefined };
-        }
-        if (outputMode === "jsonl") {
-          const parsed = parseCliJsonl(stdout, backend);
-          return parsed ?? { text: stdout };
-        }
-
-        const parsed = parseCliJson(stdout, backend);
-        return parsed ?? { text: stdout };
+        return parsedOutput;
       });
 
       return output;
