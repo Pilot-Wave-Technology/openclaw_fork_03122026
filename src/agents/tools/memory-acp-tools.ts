@@ -34,18 +34,12 @@ function getAuthToken(): string {
 
 const AcpMemorySearchSchema = Type.Object({
   query: Type.String({
-    description: "What to search for in your project memory.",
+    description: "What to search for in your project memory. Searches across ALL your goals automatically.",
   }),
-  scope: Type.Optional(
-    Type.String({
-      description:
-        'Search scope: "all" (default — searches ALL your goals, current goal ranked higher), "goal" (current goal only), "conversation" (this chat only).',
-    }),
-  ),
   type: Type.Optional(
     Type.String({
       description:
-        'Filter by type: "decision", "task_outcome", "blocker", "progress", "message", "preference", "observation", "context".',
+        'Filter by type: "decision", "task_outcome", "blocker", "progress", "message", "preference", "observation", "context". Omit to search all types.',
     }),
   ),
   max_results: Type.Optional(
@@ -70,7 +64,6 @@ export function createAcpMemorySearchTool(opts?: {
     execute: async (_toolCallId, args, signal) => {
       const params = args as Record<string, unknown>;
       const query = readStringParam(params, "query", { required: true });
-      const scope = readStringParam(params, "scope") || "all";
       const type = readStringParam(params, "type") || "";
       const maxResults = readNumberParam(params, "max_results") || 10;
 
@@ -86,16 +79,16 @@ export function createAcpMemorySearchTool(opts?: {
         });
       }
 
-      // agent_id is the gateway instance ID — control panel resolves goal_id/thread_id from agent_instances table
+      // Always search all goals — scope is always "all", not exposed to the agent
       const searchParams = new URLSearchParams({
         q: query,
-        scope,
+        scope: "all",
         max_results: String(maxResults),
       });
       if (type) searchParams.set("type", type);
 
       const url = `${baseUrl}/internal/memory/${encodeURIComponent(agentId)}/search?${searchParams}`;
-      logMemoryToolInfo("memory_search", `query="${query}" scope=${scope} agent=${agentId}`);
+      logMemoryToolInfo("memory_search", `query="${query}" agent=${agentId}`);
 
       try {
         const res = await fetch(url, {
