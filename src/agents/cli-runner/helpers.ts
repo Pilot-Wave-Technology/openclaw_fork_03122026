@@ -30,6 +30,9 @@ type CliUsage = {
   cacheRead?: number;
   cacheWrite?: number;
   total?: number;
+  costUsd?: number;
+  numTurns?: number;
+  durationMs?: number;
 };
 
 export type CliOutput = {
@@ -193,6 +196,24 @@ export function parseCliJson(raw: string, backend: CliBackendConfig): CliOutput 
   }
   const sessionId = pickSessionId(parsed, backend);
   const usage = isRecord(parsed.usage) ? toUsage(parsed.usage) : undefined;
+
+  // Capture root-level cost/duration fields from Claude CLI
+  if (usage) {
+    if (typeof parsed.total_cost_usd === "number") {
+      usage.costUsd = parsed.total_cost_usd;
+    } else if (typeof parsed.totalCostUsd === "number") {
+      usage.costUsd = parsed.totalCostUsd;
+    }
+    if (typeof parsed.num_turns === "number") {
+      usage.numTurns = parsed.num_turns;
+    }
+    if (typeof parsed.total_duration_ms === "number") {
+      usage.durationMs = parsed.total_duration_ms;
+    } else if (typeof parsed.total_duration_api_ms === "number") {
+      usage.durationMs = parsed.total_duration_api_ms;
+    }
+  }
+
   const text =
     collectText(parsed.message) ||
     collectText(parsed.content) ||

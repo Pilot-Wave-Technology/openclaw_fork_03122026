@@ -418,7 +418,7 @@ export async function runCliAgent(params: {
 
         const outputMode = useResume ? (backend.resumeOutput ?? backend.output) : backend.output;
 
-        let parsedOutput: { text: string; sessionId?: string; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number } };
+        let parsedOutput: { text: string; sessionId?: string; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number; costUsd?: number; numTurns?: number } };
         if (outputMode === "text") {
           parsedOutput = { text: stdout, sessionId: undefined };
         } else if (outputMode === "jsonl") {
@@ -442,6 +442,8 @@ export async function runCliAgent(params: {
             output_tokens: parsedOutput.usage.output,
             cache_read_tokens: parsedOutput.usage.cacheRead,
             cache_write_tokens: parsedOutput.usage.cacheWrite,
+            cost_usd: parsedOutput.usage.costUsd,
+            num_turns: parsedOutput.usage.numTurns,
           } : undefined,
           session_id: parsedOutput.sessionId,
         });

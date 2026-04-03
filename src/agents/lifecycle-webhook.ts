@@ -31,8 +31,9 @@ interface LifecycleEvent {
     output_tokens?: number;
     cache_read_tokens?: number;
     cache_write_tokens?: number;
+    cost_usd?: number;
+    num_turns?: number;
   };
-  num_turns?: number;
   session_id?: string;
 }
 
