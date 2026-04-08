@@ -39,6 +39,11 @@ const CreateTaskSchema = Type.Object({
     }),
     { description: "Which goal resources this task needs. Check RESOURCES.md for available resources. If omitted, all goal resources are assigned." },
   )),
+  parent_task_id: Type.Optional(Type.String({
+    description:
+      "If creating a subtask, the parent task ID. " +
+      "Subtasks appear nested under the parent on the task board.",
+  })),
   source_thread_id: Type.Optional(Type.String({
     description:
       "The conversation thread ID where this task was requested. " +
@@ -84,6 +89,9 @@ export function createTaskTool(opts?: {
         else if (sourceThreadId) body.source_thread_id = sourceThreadId;
         const gwAgentId = resolveAgentIdFromSession(opts?.agentSessionKey);
         if (gwAgentId) body.gateway_agent_id = gwAgentId;
+        // Parent task for subtask hierarchy
+        const parentTaskId = readStringParam(params, "parent_task_id") || "";
+        if (parentTaskId) body.parent_task_id = parentTaskId;
         // Pass resource requirements if specified
         const resources = params.resources;
         if (Array.isArray(resources) && resources.length > 0) {
