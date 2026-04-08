@@ -159,13 +159,14 @@ export function createResourceScanTool(opts?: {
 
 const ResourceReadSchema = Type.Object({
   resource_id: Type.String({
-    description: "The repo or branch resource ID.",
+    description: "The resource ID to read.",
   }),
-  path: Type.String({
+  path: Type.Optional(Type.String({
     description:
-      "File path within the repository to read. " +
-      "Example: 'src/routes/auth.ts', 'package.json', 'README.md'.",
-  }),
+      "File path within the repository to read (required for repo/branch resources). " +
+      "Example: 'src/routes/auth.ts', 'package.json'. " +
+      "Not needed for uploaded documents — leave empty to read the full document.",
+  })),
   lines: Type.Optional(Type.Number({
     description: "Maximum number of lines to return. Default: 500.",
   })),
@@ -179,15 +180,15 @@ export function createResourceReadTool(opts?: {
     label: "Resource Read File",
     name: "pwt_resource_read",
     description:
-      "Read a specific file from a repo or branch resource. " +
-      "Returns the file content in real-time via GitHub API. " +
-      "Use this when you need to see actual code or configuration to make planning decisions. " +
-      "Large files are truncated to the specified line limit.",
+      "Read the content of a resource. " +
+      "For repos/branches: reads a specific file via GitHub API (path required). " +
+      "For uploaded documents (PDF, Excel, Word, Markdown): reads the full extracted text (no path needed). " +
+      "Use this when you need to see actual content to make planning decisions.",
     parameters: ResourceReadSchema,
     execute: async (_toolCallId, args, signal) => {
       const params = args as Record<string, unknown>;
       const resourceId = readStringParam(params, "resource_id", { required: true, trim: true });
-      const path = readStringParam(params, "path", { required: true, trim: true });
+      const path = readStringParam(params, "path") || "";
       const lines = typeof params.lines === "number" ? params.lines : 500;
 
       const goalId = resolveGoalIdFromSession(opts?.agentSessionKey) || "";
