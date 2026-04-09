@@ -171,3 +171,142 @@ export function storyUpdateTool(opts?: {
     },
   };
 }
+
+// ── pwt_create_story ────────────────────────────────────────────────────────
+
+const CreateStorySchema = Type.Object({
+  title: Type.String({ description: "Clear story title describing the work item." }),
+  description: Type.Optional(Type.String({ description: "Detailed description of what needs to be done." })),
+  acceptance_criteria: Type.Optional(Type.String({ description: "How we know this story is done." })),
+  assigned_to: Type.Optional(Type.String({ description: "Human uid to assign to." })),
+  priority: Type.Optional(Type.String({ description: "low, medium, high, or critical." })),
+  depends_on: Type.Optional(Type.Array(Type.String(), { description: "Story IDs or titles this depends on." })),
+  estimated_effort: Type.Optional(Type.String({ description: "e.g. '2 days', '1 week'" })),
+});
+
+export function storyCreateTool(opts?: {
+  config?: OpenClawConfig;
+  goalId?: string;
+  agentSessionKey?: string;
+}): AnyAgentTool {
+  return {
+    label: "Create Story",
+    name: "pwt_create_story",
+    description:
+      "Create a new story on the Story Board. Stories are human-level work items. " +
+      "Only create stories after the team has approved your plan. " +
+      "The story appears as 'proposed' and the assigned human must accept it.",
+    parameters: CreateStorySchema,
+    execute: async (_toolCallId: string, args: unknown, _signal: unknown) => {
+      const params = args as Record<string, unknown>;
+      const goalId = opts?.goalId || resolveGoalIdFromSession(opts?.agentSessionKey) || "";
+      if (!goalId) return jsonResult({ success: false, error: "Could not determine goal_id." });
+      const { url, token } = getControlPanelConfig();
+      if (!url) return jsonResult({ success: false, error: "CONTROL_PANEL_URL not set." });
+      try {
+        const res = await fetch(
+          `${url}/internal/goals/${encodeURIComponent(goalId)}/stories/create`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(params),
+          },
+        );
+        if (!res.ok) return jsonResult({ success: false, error: `HTTP ${res.status}`, body: await res.text() });
+        return jsonResult(await res.json());
+      } catch (e: any) {
+        return jsonResult({ success: false, error: e.message });
+      }
+    },
+  };
+}
+
+// ── pwt_update_story ────────────────────────────────────────────────────────
+
+const UpdateStorySchema = Type.Object({
+  story_id: Type.String({ description: "The story ID to update." }),
+  description: Type.Optional(Type.String({ description: "New description." })),
+  acceptance_criteria: Type.Optional(Type.String({ description: "New acceptance criteria." })),
+  priority: Type.Optional(Type.String({ description: "New priority." })),
+  assigned_to: Type.Optional(Type.String({ description: "New assignee uid." })),
+  depends_on: Type.Optional(Type.Array(Type.String(), { description: "New dependency list." })),
+  estimated_effort: Type.Optional(Type.String({ description: "New effort estimate." })),
+});
+
+export function storyModifyTool(opts?: {
+  config?: OpenClawConfig;
+  goalId?: string;
+  agentSessionKey?: string;
+}): AnyAgentTool {
+  return {
+    label: "Update Story",
+    name: "pwt_update_story",
+    description: "Update a story's description, acceptance criteria, priority, assignee, dependencies, or effort estimate.",
+    parameters: UpdateStorySchema,
+    execute: async (_toolCallId: string, args: unknown, _signal: unknown) => {
+      const params = args as Record<string, unknown>;
+      const storyId = readStringParam(params, "story_id", { required: true, trim: true });
+      const goalId = opts?.goalId || resolveGoalIdFromSession(opts?.agentSessionKey) || "";
+      if (!goalId) return jsonResult({ success: false, error: "Could not determine goal_id." });
+      const { url, token } = getControlPanelConfig();
+      if (!url) return jsonResult({ success: false, error: "CONTROL_PANEL_URL not set." });
+      try {
+        const res = await fetch(
+          `${url}/internal/goals/${encodeURIComponent(goalId)}/stories/${encodeURIComponent(storyId)}/modify`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(params),
+          },
+        );
+        if (!res.ok) return jsonResult({ success: false, error: `HTTP ${res.status}`, body: await res.text() });
+        return jsonResult(await res.json());
+      } catch (e: any) {
+        return jsonResult({ success: false, error: e.message });
+      }
+    },
+  };
+}
+
+// ── pwt_cancel_story ────────────────────────────────────────────────────────
+
+const CancelStorySchema = Type.Object({
+  story_id: Type.String({ description: "The story ID to cancel." }),
+  reason: Type.String({ description: "Why this story is being cancelled." }),
+});
+
+export function storyCancelTool(opts?: {
+  config?: OpenClawConfig;
+  goalId?: string;
+  agentSessionKey?: string;
+}): AnyAgentTool {
+  return {
+    label: "Cancel Story",
+    name: "pwt_cancel_story",
+    description: "Cancel a story. The assignee is notified. Only cancel after team approval.",
+    parameters: CancelStorySchema,
+    execute: async (_toolCallId: string, args: unknown, _signal: unknown) => {
+      const params = args as Record<string, unknown>;
+      const storyId = readStringParam(params, "story_id", { required: true, trim: true });
+      const reason = readStringParam(params, "reason", { required: true });
+      const goalId = opts?.goalId || resolveGoalIdFromSession(opts?.agentSessionKey) || "";
+      if (!goalId) return jsonResult({ success: false, error: "Could not determine goal_id." });
+      const { url, token } = getControlPanelConfig();
+      if (!url) return jsonResult({ success: false, error: "CONTROL_PANEL_URL not set." });
+      try {
+        const res = await fetch(
+          `${url}/internal/goals/${encodeURIComponent(goalId)}/stories/${encodeURIComponent(storyId)}/cancel`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ reason }),
+          },
+        );
+        if (!res.ok) return jsonResult({ success: false, error: `HTTP ${res.status}`, body: await res.text() });
+        return jsonResult(await res.json());
+      } catch (e: any) {
+        return jsonResult({ success: false, error: e.message });
+      }
+    },
+  };
+}
