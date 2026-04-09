@@ -5,10 +5,10 @@
  * pwt_story_detail — get full story context
  * pwt_story_update — post a progress update (Gemini-merged)
  */
-import { Type, type Static } from "@sinclair/typebox";
-import type { AnyAgentTool } from "../../tool-api.js";
-import type { OpenClawConfig } from "../../config/types.js";
-import { readStringParam } from "../cli-runner/helpers.js";
+import { Type } from "@sinclair/typebox";
+import type { OpenClawConfig } from "../../config/config.js";
+import type { AnyAgentTool } from "./common.js";
+import { jsonResult, readStringParam } from "./common.js";
 
 function getControlPanelConfig() {
   const url = process.env.CONTROL_PANEL_URL || "";
@@ -26,10 +26,6 @@ function resolveGoalIdFromSession(sessionKey?: string): string {
     return dashIdx > 0 ? goalThread.substring(0, dashIdx) : goalThread;
   }
   return "";
-}
-
-function jsonResult(obj: unknown) {
-  return { type: "text" as const, text: JSON.stringify(obj, null, 2) };
 }
 
 // ── pwt_story_list ──────────────────────────────────────────────────────────
