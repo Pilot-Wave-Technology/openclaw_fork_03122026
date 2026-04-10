@@ -25,7 +25,11 @@ import { createSubagentsTool } from "./tools/subagents-tool.js";
 import { createTaskTool, createTaskStatusTool, createTaskActivityTool, createMessageShcaTool } from "./tools/task-management-tools.js";
 import { createTaskReportTool } from "./tools/task-report-tool.js";
 import { createResourceSummaryTool, createResourceScanTool, createResourceReadTool, createResourceListTool } from "./tools/resource-tools.js";
-import { storyListTool, storyDetailTool, storyUpdateTool, storyCreateTool, storyModifyTool, storyCancelTool } from "./tools/story-tools.js";
+import {
+  storyListTool, storyDetailTool, storyUpdateTool, storyCreateTool, storyModifyTool, storyCancelTool,
+  messageGoTool, replyAssistantTool, createBranchTool, registerResourceTool,
+  linkStoryResourceTool, recordDecisionTool, listDecisionsTool, criticalPathTool,
+} from "./tools/story-tools.js";
 import { createAcpMemorySearchTool, createAcpMemoryGetTool, createAcpMemorySaveTool } from "./tools/memory-acp-tools.js";
 import { createTtsTool } from "./tools/tts-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
@@ -230,6 +234,38 @@ export function createOpenClawTools(
       agentSessionKey: options?.agentSessionKey,
     }),
     storyCancelTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    messageGoTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    replyAssistantTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    createBranchTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    registerResourceTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    linkStoryResourceTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    recordDecisionTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    listDecisionsTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    criticalPathTool({
       config: options?.config,
       agentSessionKey: options?.agentSessionKey,
     }),

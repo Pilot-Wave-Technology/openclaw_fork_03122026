@@ -1,9 +1,20 @@
 /**
- * Story tools for SHCA and GO agents.
+ * Story and collaboration tools for SHCA and GO agents.
  *
- * pwt_story_list   — list all stories in the goal
- * pwt_story_detail — get full story context
- * pwt_story_update — post a progress update (Gemini-merged)
+ * pwt_story_list        — list all stories in the goal
+ * pwt_story_detail      — get full story context
+ * pwt_story_update      — post a progress update (Gemini-merged)
+ * pwt_create_story      — GO creates a story
+ * pwt_update_story      — GO updates a story
+ * pwt_cancel_story      — GO cancels a story
+ * pwt_message_go        — SHCA posts to orchestrator channel
+ * pwt_reply_assistant   — GO replies to a specific story's assistant
+ * pwt_create_branch     — GO creates a feature branch
+ * pwt_register_resource — SHCA registers a new resource
+ * pwt_link_story_resource — GO links resource to story
+ * pwt_record_decision   — GO records a decision
+ * pwt_list_decisions    — read goal decisions
+ * pwt_critical_path     — GO checks critical path
  */
 import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
@@ -309,4 +320,205 @@ export function storyCancelTool(opts?: {
       }
     },
   };
+}
+
+// ── Helper for POST tools ───────────────────────────────────────────────────
+
+function makePostTool(
+  name: string, label: string, description: string,
+  schema: ReturnType<typeof Type.Object>,
+  pathFn: (goalId: string, params: Record<string, unknown>) => string,
+  bodyFn?: (params: Record<string, unknown>) => unknown,
+  opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string },
+): AnyAgentTool {
+  return {
+    label, name, description, parameters: schema,
+    execute: async (_tid: string, args: unknown, _sig: unknown) => {
+      const params = args as Record<string, unknown>;
+      const goalId = opts?.goalId || resolveGoalIdFromSession(opts?.agentSessionKey) || "";
+      if (!goalId) return jsonResult({ success: false, error: "Could not determine goal_id." });
+      const { url, token } = getControlPanelConfig();
+      if (!url) return jsonResult({ success: false, error: "CONTROL_PANEL_URL not set." });
+      try {
+        const res = await fetch(`${url}${pathFn(goalId, params)}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(bodyFn ? bodyFn(params) : params),
+        });
+        if (!res.ok) return jsonResult({ success: false, error: `HTTP ${res.status}`, body: await res.text() });
+        return jsonResult(await res.json());
+      } catch (e: any) {
+        return jsonResult({ success: false, error: e.message });
+      }
+    },
+  };
+}
+
+function makeGetTool(
+  name: string, label: string, description: string,
+  schema: ReturnType<typeof Type.Object>,
+  pathFn: (goalId: string, params: Record<string, unknown>) => string,
+  opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string },
+): AnyAgentTool {
+  return {
+    label, name, description, parameters: schema,
+    execute: async (_tid: string, args: unknown, _sig: unknown) => {
+      const params = args as Record<string, unknown>;
+      const goalId = opts?.goalId || resolveGoalIdFromSession(opts?.agentSessionKey) || "";
+      if (!goalId) return jsonResult({ success: false, error: "Could not determine goal_id." });
+      const { url, token } = getControlPanelConfig();
+      if (!url) return jsonResult({ success: false, error: "CONTROL_PANEL_URL not set." });
+      try {
+        const res = await fetch(`${url}${pathFn(goalId, params)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return jsonResult({ success: false, error: `HTTP ${res.status}`, body: await res.text() });
+        return jsonResult(await res.json());
+      } catch (e: any) {
+        return jsonResult({ success: false, error: e.message });
+      }
+    },
+  };
+}
+
+// ── pwt_message_go ──────────────────────────────────────────────────────────
+
+export function messageGoTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makePostTool(
+    "pwt_message_go", "Message GO",
+    "Post a message to the Goal Orchestrator via the orchestrator channel. " +
+    "Use type='question' for questions, 'update' for progress updates (also updates story summary), " +
+    "'request' for resource requests.",
+    Type.Object({
+      story_id: Type.String({ description: "Your current story ID (from IDENTITY.md)." }),
+      message: Type.String({ description: "The message to send to the GO." }),
+      type: Type.Optional(Type.String({ description: "question | update | request. Defaults to update." })),
+    }),
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/orchestrator/message`,
+    (params) => ({
+      ...params,
+      gateway_agent_id: resolveAgentIdFromSession(opts?.agentSessionKey) || "",
+    }),
+    opts,
+  );
+}
+
+// ── pwt_reply_assistant ─────────────────────────────────────────────────────
+
+export function replyAssistantTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makePostTool(
+    "pwt_reply_assistant", "Reply to Assistant",
+    "Reply to a specific story's assistant. The message appears in the orchestrator channel " +
+    "AND is delivered to the assistant's conversation thread.",
+    Type.Object({
+      story_id: Type.String({ description: "The story ID whose assistant you're replying to." }),
+      message: Type.String({ description: "Your reply to the assistant." }),
+    }),
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/orchestrator/reply`,
+    undefined, opts,
+  );
+}
+
+// ── pwt_create_branch ───────────────────────────────────────────────────────
+
+export function createBranchTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makePostTool(
+    "pwt_create_branch", "Create Branch",
+    "Create a feature branch from an existing repo/branch resource. " +
+    "The new branch is registered as a goal resource linked to the story.",
+    Type.Object({
+      resource_id: Type.String({ description: "The repo/branch resource ID to branch FROM." }),
+      branch_name: Type.String({ description: "New branch name (e.g. feat/story-abc)." }),
+      story_id: Type.Optional(Type.String({ description: "Story ID to link this branch to." })),
+    }),
+    (goalId, params) => `/internal/goals/${encodeURIComponent(goalId)}/resources/${encodeURIComponent(String(params.resource_id))}/branch`,
+    undefined, opts,
+  );
+}
+
+// ── pwt_register_resource ───────────────────────────────────────────────────
+
+export function registerResourceTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makePostTool(
+    "pwt_register_resource", "Register Resource",
+    "Register a new resource you created (branch, document, file). " +
+    "It becomes a goal resource visible to the GO and other stories.",
+    Type.Object({
+      name: Type.String({ description: "Resource name (e.g. feat/auth-middleware)." }),
+      kind: Type.String({ description: "Resource kind: branch | document | file | config | other." }),
+      uri: Type.Optional(Type.String({ description: "URL or path to the resource." })),
+      story_id: Type.Optional(Type.String({ description: "Story that produced this resource." })),
+      description: Type.Optional(Type.String({ description: "What this resource is." })),
+    }),
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/resources/register`,
+    undefined, opts,
+  );
+}
+
+// ── pwt_link_story_resource ─────────────────────────────────────────────────
+
+export function linkStoryResourceTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makePostTool(
+    "pwt_link_story_resource", "Link Story Resource",
+    "Link a resource to a story as needs/produces/modifies. " +
+    "This tracks what each story depends on and produces.",
+    Type.Object({
+      story_id: Type.String({ description: "The story ID." }),
+      resource_id: Type.String({ description: "The resource ID to link." }),
+      relation: Type.String({ description: "needs | produces | modifies." }),
+      notes: Type.Optional(Type.String({ description: "Additional context." })),
+    }),
+    (goalId, params) => `/internal/goals/${encodeURIComponent(goalId)}/stories/${encodeURIComponent(String(params.story_id))}/resources`,
+    undefined, opts,
+  );
+}
+
+// ── pwt_record_decision ─────────────────────────────────────────────────────
+
+export function recordDecisionTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makePostTool(
+    "pwt_record_decision", "Record Decision",
+    "Record a goal decision (e.g. tech choice, architecture decision). " +
+    "Decisions are shared with all assistants via IDENTITY.md.",
+    Type.Object({
+      decision: Type.String({ description: "The decision made." }),
+      rationale: Type.Optional(Type.String({ description: "Why this decision was made." })),
+      story_id: Type.Optional(Type.String({ description: "Related story if any." })),
+    }),
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/decisions`,
+    undefined, opts,
+  );
+}
+
+// ── pwt_list_decisions ──────────────────────────────────────────────────────
+
+export function listDecisionsTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makeGetTool(
+    "pwt_list_decisions", "List Decisions",
+    "List all recorded decisions for this goal.",
+    Type.Object({}),
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/decisions`,
+    opts,
+  );
+}
+
+// ── pwt_critical_path ───────────────────────────────────────────────────────
+
+export function criticalPathTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makeGetTool(
+    "pwt_critical_path", "Critical Path",
+    "Calculate the critical path — the longest chain of dependent stories. " +
+    "Helps identify bottlenecks and prioritize work.",
+    Type.Object({}),
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/critical-path`,
+    opts,
+  );
+}
+
+// ── Helper: extract agent ID from session key ───────────────────────────────
+
+function resolveAgentIdFromSession(sessionKey?: string): string {
+  if (!sessionKey) return "";
+  const parts = sessionKey.split(":");
+  return parts.length >= 2 ? parts[1] : "";
 }
