@@ -43,6 +43,7 @@ import {
   validateAgentsFilesGetParams,
   validateAgentsFilesListParams,
   validateAgentsFilesSetParams,
+  validateAgentsFilesDeleteParams,
   validateAgentsListParams,
   validateAgentsUpdateParams,
 } from "../protocol/index.js";
@@ -837,6 +838,63 @@ export const agentsHandlers: GatewayRequestHandlers = {
           updatedAtMs: meta?.updatedAtMs,
           content: echoContent,
         },
+      },
+      undefined,
+    );
+  },
+  "agents.files.delete": async ({ params, respond }) => {
+    if (!validateAgentsFilesDeleteParams(params)) {
+      respondInvalidMethodParams(
+        respond, "agents.files.delete", validateAgentsFilesDeleteParams.errors,
+      );
+      return;
+    }
+    const resolved = resolveAgentWorkspaceFileOrRespondError(params, respond);
+    if (!resolved) {
+      return;
+    }
+    const { agentId, workspaceDir, name } = resolved;
+    const resolvedPath = await resolveWorkspaceFilePathOrRespond({
+      respond,
+      workspaceDir,
+      name,
+    });
+    if (!resolvedPath) {
+      return;
+    }
+    const relativeDeletePath = path.relative(
+      resolvedPath.workspaceReal, resolvedPath.ioPath,
+    );
+    if (
+      !relativeDeletePath ||
+      relativeDeletePath.startsWith("..") ||
+      path.isAbsolute(relativeDeletePath)
+    ) {
+      respondWorkspaceFileUnsafe(respond, name);
+      return;
+    }
+    let existed = true;
+    try {
+      await fs.unlink(resolvedPath.ioPath);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code === "ENOENT") {
+        // Already gone — treat as idempotent success.
+        existed = false;
+      } else {
+        const reason = err instanceof Error ? err.message : "unknown delete error";
+        respondWorkspaceFileWriteError(respond, name, reason);
+        return;
+      }
+    }
+    respond(
+      true,
+      {
+        ok: true,
+        agentId,
+        workspace: workspaceDir,
+        name,
+        existed,
       },
       undefined,
     );
