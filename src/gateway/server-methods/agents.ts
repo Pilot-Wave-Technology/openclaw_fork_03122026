@@ -759,6 +759,8 @@ export const agentsHandlers: GatewayRequestHandlers = {
       return;
     }
     const content = String(params.content ?? "");
+    const requestedEncoding =
+      typeof params.encoding === "string" ? params.encoding : "utf8";
     const relativeWritePath = path.relative(resolvedPath.workspaceReal, resolvedPath.ioPath);
     if (
       !relativeWritePath ||
@@ -769,18 +771,33 @@ export const agentsHandlers: GatewayRequestHandlers = {
       return;
     }
     try {
-      await writeFileWithinRoot({
-        rootDir: resolvedPath.workspaceReal,
-        relativePath: relativeWritePath,
-        data: content,
-        encoding: "utf8",
-      });
+      if (requestedEncoding === "base64") {
+        // Caller passed base64-encoded bytes (binary file: PDF/DOCX/XLSX/...).
+        // Decode into a Buffer and write the raw bytes — do not pass an
+        // encoding to writeFileWithinRoot so it writes the buffer as-is.
+        const bytes = Buffer.from(content, "base64");
+        await writeFileWithinRoot({
+          rootDir: resolvedPath.workspaceReal,
+          relativePath: relativeWritePath,
+          data: bytes,
+        });
+      } else {
+        await writeFileWithinRoot({
+          rootDir: resolvedPath.workspaceReal,
+          relativePath: relativeWritePath,
+          data: content,
+          encoding: "utf8",
+        });
+      }
     } catch (err) {
       const reason = err instanceof Error ? err.message : "unknown write error";
       respondWorkspaceFileWriteError(respond, name, reason);
       return;
     }
     const meta = await statFileSafely(resolvedPath.ioPath);
+    // For binary writes, echoing back the original base64 would be huge and
+    // useless — return an empty string instead so the result stays small.
+    const echoContent = requestedEncoding === "base64" ? "" : content;
     respond(
       true,
       {
@@ -793,7 +810,7 @@ export const agentsHandlers: GatewayRequestHandlers = {
           missing: false,
           size: meta?.size,
           updatedAtMs: meta?.updatedAtMs,
-          content,
+          content: echoContent,
         },
       },
       undefined,

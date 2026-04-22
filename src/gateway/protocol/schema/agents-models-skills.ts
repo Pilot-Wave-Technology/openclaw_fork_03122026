@@ -167,6 +167,12 @@ export const AgentsFilesSetParamsSchema = Type.Object(
     agentId: NonEmptyString,
     name: NonEmptyString,
     content: Type.String(),
+    // Optional: "utf8" (default) writes content as-is; "base64" decodes
+    // content from base64 before writing, so the caller can push binary
+    // payloads (PDFs, DOCX, XLSX, images, …) through this same method.
+    encoding: Type.Optional(
+      Type.Union([Type.Literal("utf8"), Type.Literal("base64")]),
+    ),
   },
   { additionalProperties: false },
 );
