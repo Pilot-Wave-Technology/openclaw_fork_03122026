@@ -67,6 +67,31 @@ const MEMORY_FILE_NAMES = [DEFAULT_MEMORY_FILENAME, DEFAULT_MEMORY_ALT_FILENAME]
 
 const ALLOWED_FILE_NAMES = new Set<string>([...BOOTSTRAP_FILE_NAMES, ...MEMORY_FILE_NAMES]);
 
+// Files under docs/ are goal-resource documents uploaded by humans (via the
+// control panel, Slack, or the chat paperclip). Admit any filename with one
+// of these extensions — the host control panel enforces what gets uploaded
+// (see app/services/resource_upload.py ALLOWED_FILE_TYPES), so we just check
+// the extension here and guard against path escapes.
+const ALLOWED_DOC_EXTENSIONS = new Set<string>([
+  "md", "txt", "json", "yaml", "yml", "csv", "tsv",
+  "html", "htm", "xml", "log", "rst", "ini", "toml",
+  "sql", "sh", "env", "conf",
+  "pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt",
+  "png", "jpg", "jpeg", "gif", "webp",
+]);
+
+function isAllowedDocsPath(name: string): boolean {
+  // Must be docs/<filename> — no nested dirs, no path escapes.
+  if (!name.startsWith("docs/")) return false;
+  const rest = name.slice("docs/".length);
+  if (!rest || rest.includes("/") || rest.includes("\\")) return false;
+  if (rest.includes("..")) return false;
+  const dot = rest.lastIndexOf(".");
+  if (dot <= 0) return false;
+  const ext = rest.slice(dot + 1).toLowerCase();
+  return ALLOWED_DOC_EXTENSIONS.has(ext);
+}
+
 function resolveAgentWorkspaceFileOrRespondError(
   params: Record<string, unknown>,
   respond: RespondFn,
@@ -90,7 +115,7 @@ function resolveAgentWorkspaceFileOrRespondError(
   const name = (
     typeof rawName === "string" || typeof rawName === "number" ? String(rawName) : ""
   ).trim();
-  if (!ALLOWED_FILE_NAMES.has(name)) {
+  if (!ALLOWED_FILE_NAMES.has(name) && !isAllowedDocsPath(name)) {
     respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, `unsupported file "${name}"`));
     return null;
   }
