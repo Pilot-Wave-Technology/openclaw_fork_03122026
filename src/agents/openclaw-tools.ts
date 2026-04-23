@@ -28,7 +28,8 @@ import { createResourceSummaryTool, createResourceScanTool, createResourceReadTo
 import {
   storyListTool, storyDetailTool, storyUpdateTool, storyCreateTool, storyModifyTool, storyCancelTool,
   messageGoTool, replyAssistantTool, createBranchTool, registerResourceTool,
-  linkStoryResourceTool, recordDecisionTool, listDecisionsTool, criticalPathTool,
+  grantResourceTool, revokeResourceTool, listAllocationsTool,
+  recordDecisionTool, listDecisionsTool, criticalPathTool,
 } from "./tools/story-tools.js";
 import { createAcpMemorySearchTool, createAcpMemoryGetTool, createAcpMemorySaveTool } from "./tools/memory-acp-tools.js";
 import { createTtsTool } from "./tools/tts-tool.js";
@@ -253,7 +254,15 @@ export function createOpenClawTools(
       config: options?.config,
       agentSessionKey: options?.agentSessionKey,
     }),
-    linkStoryResourceTool({
+    grantResourceTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    revokeResourceTool({
+      config: options?.config,
+      agentSessionKey: options?.agentSessionKey,
+    }),
+    listAllocationsTool({
       config: options?.config,
       agentSessionKey: options?.agentSessionKey,
     }),

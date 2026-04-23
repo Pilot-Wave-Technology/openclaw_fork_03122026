@@ -11,7 +11,9 @@
  * pwt_reply_assistant   — GO replies to a specific story's assistant
  * pwt_create_branch     — GO creates a feature branch
  * pwt_register_resource — SHCA registers a new resource
- * pwt_link_story_resource — GO links resource to story
+ * pwt_grant_resource    — GO grants resource to story / SHCA grants to task
+ * pwt_revoke_resource   — GO revokes from story / SHCA revokes from task
+ * pwt_list_allocations  — list current allocations for a goal|story|task
  * pwt_record_decision   — GO records a decision
  * pwt_list_decisions    — read goal decisions
  * pwt_critical_path     — GO checks critical path
@@ -455,21 +457,91 @@ export function registerResourceTool(opts?: { config?: OpenClawConfig; goalId?: 
   );
 }
 
-// ── pwt_link_story_resource ─────────────────────────────────────────────────
+// ── pwt_grant_resource ──────────────────────────────────────────────────────
+//
+// Unified resource-allocation tool. Replaces pwt_link_story_resource.
+// - GO uses it with subject_type="story" to allocate a resource to a
+//   story (populates story_resources).
+// - SHCAs use it with subject_type="task" to add (or re-include a
+//   previously-excluded) resource for a specific task (populates
+//   task_resources).
+//
+// The `notes` field is rendered inline in the subject's RESOURCES.md
+// as "**GO note:**" (story-level) or "**SHCA note:**" (task-level),
+// giving the downstream agent per-allocation tactical guidance.
 
-export function linkStoryResourceTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+export function grantResourceTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
   return makePostTool(
-    "pwt_link_story_resource", "Link Story Resource",
-    "Link a resource to a story as needs/produces/modifies. " +
-    "This tracks what each story depends on and produces.",
+    "pwt_grant_resource", "Grant Resource",
+    "Grant access to a goal resource for a story (GO) or task (SHCA). " +
+    "The `notes` field is surfaced inline in the target's RESOURCES.md as " +
+    "per-allocation tactical guidance — use it to scope the work (which " +
+    "subfolder, which sections of a spec, what NOT to touch).",
     Type.Object({
-      story_id: Type.String({ description: "The story ID." }),
-      resource_id: Type.String({ description: "The resource ID to link." }),
-      relation: Type.String({ description: "needs | produces | modifies." }),
-      notes: Type.Optional(Type.String({ description: "Additional context." })),
+      subject_type: Type.String({ description: "'story' (GO's use) or 'task' (SHCA's use)." }),
+      subject_id: Type.String({ description: "The story_id or task_id receiving access." }),
+      resource_id: Type.String({ description: "The goal_resources.id being granted." }),
+      notes: Type.String({ description: "Tactical guidance for how to use this resource in this specific story/task." }),
+      relation: Type.Optional(Type.String({ description: "needs | produces | modifies. Defaults to 'needs'." })),
     }),
-    (goalId, params) => `/internal/goals/${encodeURIComponent(goalId)}/stories/${encodeURIComponent(String(params.story_id))}/resources`,
-    undefined, opts,
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/allocations/grant`,
+    (params) => ({
+      ...params,
+      actor_id: resolveAgentIdFromSession(opts?.agentSessionKey) || "",
+    }),
+    opts,
+  );
+}
+
+// ── pwt_revoke_resource ─────────────────────────────────────────────────────
+//
+// Revokes a resource from a story or task. For stories: deletes the
+// story_resources row. For tasks: if the resource was added at task
+// level, the addition is removed; if it's inherited from the story,
+// a task_resources row with relation='excluded' is inserted so the
+// resource is hidden from THIS task only (the story keeps it).
+
+export function revokeResourceTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makePostTool(
+    "pwt_revoke_resource", "Revoke Resource",
+    "Revoke a story's or task's access to a resource. For tasks, this " +
+    "either removes a previously-added resource or (if the resource is " +
+    "inherited from the story) hides it from this task's RESOURCES.md " +
+    "only — the story still keeps the resource.",
+    Type.Object({
+      subject_type: Type.String({ description: "'story' (GO's use) or 'task' (SHCA's use)." }),
+      subject_id: Type.String({ description: "The story_id or task_id losing access." }),
+      resource_id: Type.String({ description: "The goal_resources.id being revoked." }),
+    }),
+    (goalId) => `/internal/goals/${encodeURIComponent(goalId)}/allocations/revoke`,
+    (params) => ({
+      ...params,
+      actor_id: resolveAgentIdFromSession(opts?.agentSessionKey) || "",
+    }),
+    opts,
+  );
+}
+
+// ── pwt_list_allocations ────────────────────────────────────────────────────
+
+export function listAllocationsTool(opts?: { config?: OpenClawConfig; goalId?: string; agentSessionKey?: string }): AnyAgentTool {
+  return makeGetTool(
+    "pwt_list_allocations", "List Allocations",
+    "List the current resource allocations for a subject. For subject_type='task', " +
+    "the response merges story-inherited allocations with any task-level additions " +
+    "or exclusions — i.e. exactly what the task's RESOURCES.md renders.",
+    Type.Object({
+      subject_type: Type.String({ description: "goal | story | task." }),
+      subject_id: Type.Optional(Type.String({ description: "Required for story/task; ignored for goal." })),
+    }),
+    (goalId, params) => {
+      const qs = new URLSearchParams({
+        subject_type: String(params.subject_type),
+        subject_id: String(params.subject_id ?? ""),
+      }).toString();
+      return `/internal/goals/${encodeURIComponent(goalId)}/allocations?${qs}`;
+    },
+    opts,
   );
 }
 
